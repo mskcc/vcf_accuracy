@@ -1,6 +1,8 @@
 Install some Libs
 =================
 
+* use THIS python for below commands, so we get argparse + all these libs:
+* /opt/common/CentOS_6-dev/python/python-2.7.10/bin/python
 * download/install cmo package 
 * git clone https://github.com/mskcc/cmo.git
 * python setup.py install --user
