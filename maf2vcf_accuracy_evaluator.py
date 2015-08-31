@@ -17,18 +17,6 @@ import vcf
 from collections import defaultdict
 
 
-#1. Check for programs
-#2. Convert MAF to VCF
-#3. Normalize - Optional
-#4. Subset regions - Optional
-#For each Tumor Normal pair:
-#    4.1 read in vcf
-#    4.2 do stats
-#    4.3 store results
-#5. write results to file
-#6. delete temp files
-
-
 MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.5.4/maf2vcf.pl'
 VT_LOCATION = '/home/charris/code/VCF_accuracy_evaluator/vt/vt'
 TABIX_LOCATION = '/opt/common/CentOS_6/samtools/samtools-1.2/htslib-1.2.1/tabix'
