@@ -211,7 +211,7 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
         vcfs = compare_samples(truth, test)
 
 
-    if normalize in ('T','t','TRUE','true','True'):
+    if normalize:
         for v in vcfs:
             test = normalize_vcf('truth_vcfs/%s'%(v), reference)
             truth = normalize_vcf('test_vcfs/%s'%(v), reference)
@@ -309,8 +309,6 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
 def configure_logging(log_level):
 
     logger = logging.getLogger("MAF/VCF Accuracy Eval")
-    if log_level=="DEBUG":
-        log_level=logging.DEBUG
     logger.setLevel(log_level)
     ch = logging.StreamHandler()
     ch.setLevel(log_level)
@@ -327,13 +325,13 @@ if __name__ == '__main__':
     parser.add_argument('--truth-file', action='store', dest='ref_file', default=None, required=True, help='"Truthful" reference file.')
     parser.add_argument('--test-file', action='store', dest='test_file', default=None, required=True, help='file to be tested.')
     mutex_group = parser.add_mutually_exclusive_group(required=True)
-    mutex_group.add_argument("--vcf", dest="file_type", action="store_const", const="VCF")
-    mutex_group.add_argument("--maf", dest="file_type", action="store_const", const="MAF")
+    mutex_group.add_argument("--vcf", dest="file_type", action="store_const", const="VCF", help="input files are VCF format")
+    mutex_group.add_argument("--maf", dest="file_type", action="store_const", const="MAF", help="input files are MAF format")
     parser.add_argument('--reference', choices=cmo.util.genomes.keys(), required=True)
     parser.add_argument('--outfile', action='store', dest='outfile', default='comparison_output.txt', help='Comparison output file.')
     parser.add_argument('--bedfile', action='store', dest='bedfile', default=None, help='Optional bedfile to limit the regions of comparison.')
-    parser.add_argument('--normalize', action='store', dest='normalize', default='F')
-    parser.add_argument('--log-level', action='store', dest='log_level', default=logging.INFO, help='INFO for basic, DEBUG for (very) detailed debug output.')
+    parser.add_argument('--normalize', action='store_true', dest='normalize', default=False, help="Normalize variants with VT?" )
+    parser.add_argument('-d', '--debug', action='store_const', const=logging.DEBUG, dest='log_level', default=logging.INFO, help='Turn on debug output')
     args=parser.parse_args()
     ref_fasta = cmo.util.genomes[args.reference]['fasta']
     main(args.ref_file, args.test_file, args.file_type, ref_fasta, args.outfile, args.bedfile, args.normalize, args.log_level)
