@@ -34,6 +34,9 @@ def cleanup():
         if os.path.exists(file) and os.path.isdir(file):
             logger.debug("CLEANUP: Delete %s" % file)
             shutil.rmtree(file);
+        else:
+            logger.info("Wanted to cleanup %s, but doesn't exist or isn't a directory" % file)
+
 
 
 def cleanup_files_later(file):
@@ -321,7 +324,7 @@ def configure_logging(log_level):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Takes in reference and test MAFs and evaluates the test MAF.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='Takes in reference and test files and evaluates the test file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--truth-file', action='store', dest='ref_file', default=None, required=True, help='"Truthful" reference file.')
     parser.add_argument('--test-file', action='store', dest='test_file', default=None, required=True, help='file to be tested.')
     mutex_group = parser.add_mutually_exclusive_group(required=True)
