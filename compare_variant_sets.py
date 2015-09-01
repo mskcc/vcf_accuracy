@@ -40,9 +40,9 @@ def cleanup():
 
 
 def cleanup_files_later(file):
-    global DIR_TO_CLEANUP
-    if file not in DIR_TO_CLEANUP:
-        DIR_TO_CLEANUP.append(file)
+    global DIRS_TO_CLEANUP
+    if file not in DIRS_TO_CLEANUP:
+        DIRS_TO_CLEANUP.append(file)
 
 
 def check_for_programs():
@@ -92,7 +92,6 @@ def subset_data(vcf, bedfile):
     logger.debug('Running' + ' '.join(cmd))
     try:
         rv = subprocess.check_call(cmd, stdout=open(outfile,'w'))
-        cleanup_files_later([outfile])
     except subprocess.CalledProcessError, e:
         logger.critical("Non-zero exit code from bedtools intersect! Bailing out.")
         sys.exit(1)
@@ -133,7 +132,6 @@ def tabix_file(vcf_file):
     logger.debug('Tabix command: %s'%(' '.join(cmd)))
     try:
         rv = subprocess.check_call(cmd)
-        cleanup_files_later([vcf_file + '.tbi'])
     except subprocess.CalledProcessError, e:
         logger.critical('Non-zero exit code from Tabix! Bailing out.')
         sys.exit(1)
@@ -143,7 +141,6 @@ def normalize_vcf(vcf_file, ref_fasta):
     sorted_vcf = sort_vcf(vcf_file)
     zipped_file = bgzip(sorted_vcf)
     tabix_file(zipped_file)
-    cleanup_files_later([sorted_vcf, zipped_file])
     output_vcf = zipped_file.replace('.vcf', '.normalized.vcf')
     cmd = [VT_LOCATION, 'normalize', '-r', ref_fasta, zipped_file, '-o', output_vcf, '-q']
     logger.debug('VT Command: %s'%(' '.join(cmd)))
@@ -151,7 +148,6 @@ def normalize_vcf(vcf_file, ref_fasta):
     #logger.info('bcftools norm Command: %s'%(' '.join(cmd)))
     try:
         rv = subprocess.check_call(cmd)
-        cleanup_files_later([output_vcf])
         return output_vcf
     except subprocess.CalledProcessError, e:
         logger.critical("Non-zero exit code from normalization! Bailing out.")
@@ -302,9 +298,6 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
                     line.append("0")
         ofh.write('%s\t%s\t%s\n'%('\t'.join(line), my_date, my_time))
     ofh.close()
-    
-    shutil.rmtree('test_vcfs')
-    shutil.rmtree('truth_vcfs')
     
 
 
