@@ -26,7 +26,7 @@ BEDTOOLS_LOCATION = '/opt/common/CentOS_6/bedtools/bedtools-2.22.0/bin/bedtools'
 BCFTOOLS_LOCATION = '/opt/common/CentOS_6/bcftools/bcftools-1.2/bin/bcftools' # python vcf parser doesn't like the vcf output from becftools norm
 
 
-#Not currently used to delete files
+
 DIRS_TO_CLEANUP = []
 @atexit.register
 def cleanup():
@@ -97,63 +97,6 @@ def subset_data(vcf, bedfile):
         sys.exit(1)
 
 
-def sort_vcf(vcf):
-
-    outfile = vcf.replace('.vcf', '.sorted.vcf')
-    cmd = [SORTBED_LOCATION, '-i', vcf, '-header']
-    logger.debug('sortBed command: %s'%(' '.join(cmd)))
-    try:
-        rv = subprocess.check_call(cmd, stdout=open(outfile,'w'))
-        return outfile
-    except subprocess.CalledProcessError, e:
-        logger.critical("Non-zero exit code from sortBed! Bailing out.")
-        sys.exit(1)
-
-    
-def bgzip(vcf):
-
-    if re.search('.gz', vcf):
-        return vcf
-    outfile = '%s.gz'%(vcf)
-    cmd = [BGZIP_LOCATION, '-c', vcf]
-    logger.debug('BGZIP COMMAND: %s'%(' '.join(cmd)))
-    subprocess.call(cmd, stdout=open(outfile, 'w'))
-    return outfile
-
-
-def tabix_file(vcf_file):
-
-    ''' index a vcf file with tabix for random access'''
-    with magic.Magic(flags=magic.MAGIC_MIME_TYPE) as m:
-        if(m.id_filename(vcf_file).find('gz') == -1):
-            logger.critical('VCF File needs to be bgzipped for tabix random access. tabix-0.26/bgzip should be compiled for use')
-            sys.exit(1)
-    cmd = [TABIX_LOCATION, '-p' , 'vcf', vcf_file]
-    logger.debug('Tabix command: %s'%(' '.join(cmd)))
-    try:
-        rv = subprocess.check_call(cmd)
-    except subprocess.CalledProcessError, e:
-        logger.critical('Non-zero exit code from Tabix! Bailing out.')
-        sys.exit(1)
-
-
-def normalize_vcf(vcf_file, ref_fasta):
-    sorted_vcf = sort_vcf(vcf_file)
-    zipped_file = bgzip(sorted_vcf)
-    tabix_file(zipped_file)
-    output_vcf = zipped_file.replace('.vcf', '.normalized.vcf')
-    cmd = [VT_LOCATION, 'normalize', '-r', ref_fasta, zipped_file, '-o', output_vcf, '-q']
-    logger.debug('VT Command: %s'%(' '.join(cmd)))
-    #cmd = [BCFTOOLS_LOCATION, 'norm', '-m', '-', '-O', 'b', '-o', output_vcf, zipped_file] #Python vcf parser doesn't like bcftools norm output
-    #logger.info('bcftools norm Command: %s'%(' '.join(cmd)))
-    try:
-        rv = subprocess.check_call(cmd)
-        return output_vcf
-    except subprocess.CalledProcessError, e:
-        logger.critical("Non-zero exit code from normalization! Bailing out.")
-        sys.exit(1)
-
-
 def read_vcf(vcf_file):
 
     vcf_reader = vcf.Reader(open(vcf_file, 'r'))
@@ -179,7 +122,7 @@ def read_vcf(vcf_file):
 
 
 
-def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, log_level):
+def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, log_level):
 
     global logger
     logger = configure_logging(log_level)
@@ -200,6 +143,8 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
     truth = glob.glob('truth_vcfs/*.vcf')
     vcfs = compare_samples(truth, test)
 
+    
+    #subsetting
     if bedfile != None:
         for v in vcfs:
             subset_data('truth_vcfs/%s'%(v), bedfile)
@@ -210,16 +155,21 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
         vcfs = compare_samples(truth, test)
 
 
+    #normalization
     if normalize:
         for v in vcfs:
-            test = normalize_vcf('truth_vcfs/%s'%(v), reference)
-            truth = normalize_vcf('test_vcfs/%s'%(v), reference)
+            test = cmo.util.normalize_vcf('truth_vcfs/%s'%(v), reference)
+            truth = cmo.util.normalize_vcf('test_vcfs/%s'%(v), reference)
         test = glob.glob('test_vcfs/*.normalized.vcf.gz')
         truth = glob.glob('truth_vcfs/*.normalized.vcf.gz')
         vcfs = compare_samples(truth, test)
+    
 
+    #reading in vcfs
     sample_statistics = defaultdict(dict)
-    totals = defaultdict(dict)
+    truth_totals = defaultdict(dict)
+    test_totals = defaultdict(dict)
+    
     for v in vcfs:
         logger.info("Reading in VCF")
         (truth_chrom_pos_dict, truth_samples) = read_vcf('truth_vcfs/%s'%(v))
@@ -233,6 +183,41 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
         logger.info("Doing comparison")
         my_date = datetime.datetime.now().strftime('%Y-%m-%d')
         my_time = datetime.datetime.now().strftime('%H:%M:%S')
+
+
+        #Loops through each test call to get get the totals for SNPs and INDELs called
+        for site, test_record in test_chrom_pos_dict.items():
+            if test_record.is_snp:
+                site_type="SNP"
+            elif test_record.is_indel:
+                site_type="INDEL"
+            else:
+                logger.critical("Site is neither SNP nor INDEL?")
+                logger.critical(test_record)
+                logger.critical("Bailing out")
+                sys.exit(1)
+
+            for sample in test_samples:
+                if test_record.genotype(sample).gt_type !=0: #if not reference genotype
+                    #add something to the truth sample totals:
+                    if site_type not in test_totals[sample]:
+                        test_totals[sample][site_type]=1
+                    else:
+                        test_totals[sample][site_type]+=1
+
+            #missed in truth
+            if site not in truth_chrom_pos_dict:
+                key = "Novel_" + site_type
+                for sample in test_samples:
+                    if test_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
+                        pass #do nothing
+                    else:
+                        if key not in sample_statistics[sample]:
+                            sample_statistics[sample][key]=1
+                        else:
+                            sample_statistics[sample][key]+=1
+
+        #Loops through each truth call
         for site, truth_record in truth_chrom_pos_dict.items():
             if truth_record.is_snp:
                 site_type="SNP"
@@ -243,22 +228,31 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
                 logger.critical(truth_record)
                 logger.critical("Bailing out")
                 sys.exit(1)
+
             for sample in truth_samples:
-                if truth_record.genotype(sample).gt_type !=0:
-                    #add something to the sample totals:
-                    if site_type not in totals[sample]:
-                        totals[sample][site_type]=1
+                if truth_record.genotype(sample).gt_type !=0: #if not reference genotype
+                    #add something to the truth sample totals:
+                    if site_type not in truth_totals[sample]:
+                        truth_totals[sample][site_type]=1
                     else:
-                        totals[sample][site_type]+=1
+                        truth_totals[sample][site_type]+=1
+
+            #missed in truth
             if site not in test_chrom_pos_dict:
+                key = "Missed_" + site_type
                 for sample in truth_samples:
                     if truth_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
                         pass #do nothing
                     else:
-                        sample_statistics[sample]["Missed " + site_type]+=1
+                        if key not in sample_statistics[sample]:
+                            sample_statistics[sample][key]=1
+                        else:
+                            sample_statistics[sample][key]+=1
+                        
+#############
             else:
                 #FIXME this will break if there are multiple records per site, i.e. a list - cough up blood
-                test_record = truth_chrom_pos_dict[site] 
+                test_record = truth_chrom_pos_dict[site]
                 if isinstance(test_record, list):
                     logger.critical("Test file has multiple lines for one position!")
                     logger.critical("Change code to handle this!")
@@ -267,23 +261,27 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
                     truth_genotype = re.split("[/|]", truth_record.genotype(sample).gt_bases)
                     test_genotype = re.split("[/|]", test_record.genotype(sample).gt_bases)
                     if set(truth_genotype) == set(test_genotype):
-                        key = "Correct %s Genotype" % site_type
+                        key = "Correct_%s_Genotype" % site_type
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
                         else:
                             sample_statistics[sample][key]+=1
                     elif test_record.genotype(sample).gt_type !=0:
-                        key = "Incorrect %s Genotype" % site_type
+                        key = "Incorrect_%s_Genotype" % site_type
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
                         else:
                             sample_statistics[sample][key]+=1
+######
 
-    keys = ["Missed SNP", "Correct SNP Genotype", "Incorrect SNP Genotype", "Missed INDEL", "Correct INDEL Genotype", "Incorrect INDEL Genotype"]
-    ofh = open(outfile, "w")
+    keys = ["Missed_SNP", "Novel_SNP", "Correct_SNP_Genotype", "Incorrect_SNP_Genotype", "Missed_INDEL", "Novel_INDEL", "Correct_INDEL_Genotype", "Incorrect_INDEL_Genotype"]
+    ofh = open('%s.out'%(prefix), "w")
     logger.info("Writing stats to file...")
 
-    ofh.write("\t".join(["sample"] + keys + ['Total SNPS', 'Total INDELs', 'Date', 'Time']) + '\n')
+    ofh.write("\t".join(["sample"] + keys + ['Total_Truth_SNPs', 'Total_Truth_INDELs', 'Total_Test_SNPs', 'Total_Test_INDELs', 'Date', 'Time', 'Project_Prefix']) + '\n')
+        
+    norm_dict = defaultdict(dict)
+    tumor_dict = defaultdict(dict)
     for sample, stats in sample_statistics.items():
         line = [sample]
         for key in keys:
@@ -292,11 +290,17 @@ def main(ref_vcf, test_vcf, file_type, reference, outfile, bedfile, normalize, l
             else:
                 line.append(str(stats[key]))
         for type in ["SNP", "INDEL"]:
-            if type in totals[sample]:
-                line.append(str(totals[sample][type]))
+            if type in truth_totals[sample]:
+                line.append(str(truth_totals[sample][type]))
             else:
-                    line.append("0")
-        ofh.write('%s\t%s\t%s\n'%('\t'.join(line), my_date, my_time))
+                line.append("0")
+        for type in ["SNP", "INDEL"]:
+            if type in test_totals[sample]:
+                line.append(str(test_totals[sample][type]))
+            else:
+                line.append("0")
+
+        ofh.write('%s\t%s\t%s\t%s\n'%('\t'.join(line), my_date, my_time, prefix))
     ofh.close()
     
 
@@ -319,16 +323,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Takes in reference and test files and evaluates the test file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--truth-file', action='store', dest='ref_file', default=None, required=True, help='"Truthful" reference file.')
-    parser.add_argument('--test-file', action='store', dest='test_file', default=None, required=True, help='file to be tested.')
+    parser.add_argument('--test-file', action='store', dest='test_file', default=None, required=True, help='File to be tested.')
     mutex_group = parser.add_mutually_exclusive_group(required=True)
-    mutex_group.add_argument("--vcf", dest="file_type", action="store_const", const="VCF", help="input files are VCF format")
-    mutex_group.add_argument("--maf", dest="file_type", action="store_const", const="MAF", help="input files are MAF format")
+    mutex_group.add_argument("--vcf", dest="file_type", action="store_const", const="VCF", help="Input files are VCF format")
+    mutex_group.add_argument("--maf", dest="file_type", action="store_const", const="MAF", help="Input files are MAF format")
     parser.add_argument('--reference', choices=cmo.util.genomes.keys(), required=True)
-    parser.add_argument('--outfile', action='store', dest='outfile', default='comparison_output.txt', help='Comparison output file.')
     parser.add_argument('--bedfile', action='store', dest='bedfile', default=None, help='Optional bedfile to limit the regions of comparison.')
     parser.add_argument('--normalize', action='store_true', dest='normalize', default=False, help="Normalize variants with VT?" )
     parser.add_argument('-d', '--debug', action='store_const', const=logging.DEBUG, dest='log_level', default=logging.INFO, help='Turn on debug output')
+    parser.add_argument('-p', '--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column.')
     args=parser.parse_args()
     ref_fasta = cmo.util.genomes[args.reference]['fasta']
-    main(args.ref_file, args.test_file, args.file_type, ref_fasta, args.outfile, args.bedfile, args.normalize, args.log_level)
+    main(args.ref_file, args.test_file, args.file_type, ref_fasta, args.bedfile, args.normalize, args.prefix, args.log_level)
 
