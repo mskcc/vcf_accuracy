@@ -19,6 +19,7 @@ from collections import defaultdict
 
 
 MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.5.4/maf2vcf.pl'
+#MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.6.2/maf2vcf.pl'
 VT_LOCATION = '/home/charris/code/VCF_accuracy_evaluator/vt/vt'
 TABIX_LOCATION = '/opt/common/CentOS_6/samtools/samtools-1.2/htslib-1.2.1/tabix'
 BGZIP_LOCATION = '/opt/common/CentOS_6/samtools/samtools-1.2/htslib-1.2.1/bgzip'
@@ -212,11 +213,12 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
             if site not in truth_chrom_pos_dict:
                 key = "Novel_" + site_type
                 for sample in test_samples:
+                    line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                    details.write(line)
+
                     if test_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
                         pass #do nothing
                     else:
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
-                        details.write(line)
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
                         else:
@@ -246,11 +248,11 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
             if site not in test_chrom_pos_dict:
                 key = "Missed_" + site_type
                 for sample in truth_samples:
+                    line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                    details.write(line)
                     if truth_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
                         pass #do nothing
                     else:
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
-                        details.write(line)
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
                         else:
@@ -267,6 +269,8 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
                 for sample in truth_samples:
                     truth_genotype = re.split("[/|]", truth_record.genotype(sample).gt_bases)
                     test_genotype = re.split("[/|]", test_record.genotype(sample).gt_bases)
+                    line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                    details.write(line)
                     if set(truth_genotype) == set(test_genotype):
                         key = "Correct_%s_Genotype" % site_type
                         if key not in sample_statistics[sample]:
@@ -275,8 +279,6 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
                             sample_statistics[sample][key]+=1
                     elif test_record.genotype(sample).gt_type !=0:
                         key = "Incorrect_%s_Genotype" % site_type
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
-                        details.write(line)
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
                         else:
