@@ -18,19 +18,12 @@ from collections import defaultdict
 
 
 
-MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.5.4/maf2vcf.pl'
-#MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.6.2/maf2vcf.pl'
-VT_LOCATION = '/home/charris/code/VCF_accuracy_evaluator/vt/vt'
-TABIX_LOCATION = '/opt/common/CentOS_6/samtools/samtools-1.2/htslib-1.2.1/tabix'
-BGZIP_LOCATION = '/opt/common/CentOS_6/samtools/samtools-1.2/htslib-1.2.1/bgzip'
-SORTBED_LOCATION = '/opt/common/CentOS_6/bedtools/bedtools-2.22.0/bin/sortBed'
+MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.6.2/maf2vcf.pl'
 BEDTOOLS_LOCATION = '/opt/common/CentOS_6/bedtools/bedtools-2.22.0/bin/bedtools'
-BCFTOOLS_LOCATION = '/opt/common/CentOS_6/bcftools/bcftools-1.2/bin/bcftools' # python vcf parser doesn't like the vcf output from becftools norm
-
 
 
 DIRS_TO_CLEANUP = []
-@atexit.register
+#@atexit.register
 def cleanup():
     for file in DIRS_TO_CLEANUP:
         if os.path.exists(file) and os.path.isdir(file):
@@ -66,26 +59,36 @@ def check_for_programs():
 def convert_maf_to_vcf(maf, vcf_dir, reference):
 
     reference = reference.encode('ascii','ignore')
-    #cmd = ['perl', MAF2VCF_LOCATION, '--input-maf', maf, '--output-dir', vcf_dir, '--ref-fasta', ref_fasta]
+    #cmd = ['perl', MAF2VCF_LOCATION, '--input-maf', maf, '--output-dir', vcf_dir, '--ref-fasta', ref_fasta] #need to fix the reference
 
     cmd = ['perl', MAF2VCF_LOCATION, '--input-maf', maf, '--output-dir', vcf_dir]
     logger.debug('Running:' + ' '.join(cmd))
     subprocess.call(cmd)
 
+###################################################
+###################################################
 
 def compare_samples(truth, test):
 
     truth = [each.split('/')[1] for each in truth]
     test = [each.split('/')[1] for each in test]
 
+
     not_in_truth = set(test).difference(set(truth))
+
     if len(not_in_truth) > 0:
         logger.critical('T/N Samples in test data not found in truth set')
         logger.critical(list(not_in_truth))
-        sys.exit(1)
+        test_new = [x for x in test if x not in not_in_truth] #remove multisample VCF, FIXME
+        return test_new
+        #return test
+        #sys.exit(1)
+
     else:
         return test
 
+###################################################
+###################################################
 
 def subset_data(vcf, bedfile):
     
@@ -98,6 +101,9 @@ def subset_data(vcf, bedfile):
         logger.critical("Non-zero exit code from bedtools intersect! Bailing out.")
         sys.exit(1)
 
+
+###################################################
+###################################################
 
 def read_vcf(vcf_file):
 
@@ -113,8 +119,8 @@ def read_vcf(vcf_file):
             if isinstance(vcf_dict[key], list):
                 vcf_dict[key].append(record)
             else:
-                list = [vcf_dict[key], record]
-                vcf_dict[key]=list
+                rec_list = [vcf_dict[key], record]
+                vcf_dict[key]=rec_list
     samples = {}
     for key, record in vcf_dict.items():
         for call in record.samples:
@@ -123,8 +129,19 @@ def read_vcf(vcf_file):
     return (vcf_dict, samples.keys())
 
 
+###################################################
+###################################################
 
-def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, plot, log_level):
+def get_file_type():
+
+    pass
+
+###################################################
+###################################################
+
+
+def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normalize, prefix, plot, log_level):
+
 
     global logger
     logger = configure_logging(log_level)
@@ -133,6 +150,7 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
 
     check_for_programs()
     if file_type=="MAF":
+        print 'converting maf to vcf'
         convert_maf_to_vcf(ref_vcf, 'truth_vcfs', reference) #would prefer to call on cmo wrappper
         convert_maf_to_vcf(test_vcf, 'test_vcfs', reference) #would prefer to call on cmo wrappper
     else:
@@ -147,7 +165,7 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
     vcfs = compare_samples(truth, test)
 
     
-    #subsetting
+    print 'subsetting'
     if bedfile != None:
         for v in vcfs:
             subset_data('truth_vcfs/%s'%(v), bedfile)
@@ -158,7 +176,7 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
         vcfs = compare_samples(truth, test)
 
 
-    #normalization
+    print 'normalization'
     if normalize:
         for v in vcfs:
             test = cmo.util.normalize_vcf('truth_vcfs/%s'%(v), reference)
@@ -168,12 +186,13 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
         vcfs = compare_samples(truth, test)
     
 
-    #reading in vcfs
+    print 'reading in vcfs'
     sample_statistics = defaultdict(dict)
     truth_totals = defaultdict(dict)
     test_totals = defaultdict(dict)
     
     for v in vcfs:
+        print v
         logger.info("Reading in VCF")
         (truth_chrom_pos_dict, truth_samples) = read_vcf('truth_vcfs/%s'%(v))
         (test_chrom_pos_dict,  test_samples) = read_vcf('test_vcfs/%s'%(v))
@@ -188,9 +207,13 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
         my_time = datetime.datetime.now().strftime('%H:%M:%S')
 
 
-        #Loops through each test call to get get the totals for SNPs and INDELs called
+        print 'Loops through each test call to get get the totals for SNPs and INDELs called'
         for site, test_record in test_chrom_pos_dict.items():
-            if test_record.is_snp:
+            if isinstance(test_record, list):
+                logger.critical("Skipping site with multiple variant calls")
+                logger.critical(site)
+                continue
+            elif test_record.is_snp:
                 site_type="SNP"
             elif test_record.is_indel:
                 site_type="INDEL"
@@ -223,9 +246,13 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
                         else:
                             sample_statistics[sample][key]+=1
 
-        #Loops through each truth call
+        print 'Loops through each truth call'
         for site, truth_record in truth_chrom_pos_dict.items():
-            if truth_record.is_snp:
+            if isinstance(truth_record, list):
+                logger.critical("Skipping site with multiple variant calls")
+                logger.critical(site)
+                continue
+            elif truth_record.is_snp:
                 site_type="SNP"
             elif truth_record.is_indel:
                 site_type="INDEL"
@@ -256,8 +283,7 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
                         else:
-                            sample_statistics[sample][key]+=1
-                        
+                            sample_statistics[sample][key]+=1                        
 
             else:
                 #FIXME this will break if there are multiple records per site, i.e. a list - cough up blood
@@ -291,17 +317,29 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
     ofh = open('%s.out'%(prefix), "w")
     logger.info("Writing stats to file...")
 
-    ofh.write("\t".join(["sample"] + keys + ['Total_Truth_SNPs', 'Total_Truth_INDELs', 'Total_Test_SNPs', 'Total_Test_INDELs', 'Date', 'Time', 'Project_Prefix']) + '\n')
-        
+    ofh.write("\t".join(["sample"] + keys + ['Total_Truth_SNPs', 'Total_Truth_INDELs', 'Total_Test_SNPs', 'Total_Test_INDELs', 'Union_SNPs', 'Union_INDELs', 'Date', 'Time', 'Project_Prefix']) + '\n')
+    #print "\t".join(["sample"] + keys + ['Total_Truth_SNPs', 'Total_Truth_INDELs', 'Total_Test_SNPs', 'Total_Test_INDELs', 'Date', 'Time', 'Project_Prefix']) + '\n'
     norm_dict = defaultdict(dict)
     tumor_dict = defaultdict(dict)
+
     for sample, stats in sample_statistics.items():
+        snps_union = 0
+        indels_union = 0
+
         line = [sample]
         for key in keys:
+
+            if re.search('SNP', key) and key in stats:
+                snps_union = snps_union + stats[key]
+                #print key, stats[key], snps_union
+            if re.search('INDEL', key) and key in stats:
+                indels_union = indels_union + stats[key]
+                #print key, stats[key], indels_union
             if key not in stats:
                 line.append("0")
             else:
                 line.append(str(stats[key]))
+
         for type in ["SNP", "INDEL"]:
             if type in truth_totals[sample]:
                 line.append(str(truth_totals[sample][type]))
@@ -312,13 +350,13 @@ def main(ref_vcf, test_vcf, file_type, reference, bedfile, normalize, prefix, pl
                 line.append(str(test_totals[sample][type]))
             else:
                 line.append("0")
+        #print sample, snps_union, indels_union
 
-        ofh.write('%s\t%s\t%s\t%s\n'%('\t'.join(line), my_date, my_time, prefix))
+        ofh.write('%s\t%s\t%s\t%s\t%s\t%s\n'%('\t'.join(line), snps_union, indels_union, my_date, my_time, prefix))
     ofh.close()
         
     cmd = ['%s/vPlot.R'%(os.path.dirname(os.path.realpath(__file__))), '%s.out'%(prefix), prefix]
     subprocess.call(cmd)
-
 
 
 def configure_logging(log_level):
@@ -333,12 +371,13 @@ def configure_logging(log_level):
     return logger
 
 
-
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Takes in reference and test files and evaluates the test file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--truth-file', action='store', dest='ref_file', default=None, required=True, help='"Truthful" reference file.')
-    parser.add_argument('--test-file', action='store', dest='test_file', default=None, required=True, help='File to be tested.')
+    parser = argparse.ArgumentParser(description='Takes in two test files and evaluates the test file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--first-file', action='store', dest='ref_file', default=None, required=True, help='"Truthful" reference file.')
+    parser.add_argument('--second-file', action='store', dest='test_file', default=None, required=True, help='File to be tested.')
+    parser.add_argument('--first-prefix', action='store', dest='first', default='First', help='Prefix for first file output')
+    parser.add_argument('--second-prefix', action='store', dest='second', default='Second', help='Prefix for second file output.')
     mutex_group = parser.add_mutually_exclusive_group(required=True)
     mutex_group.add_argument("--vcf", dest="file_type", action="store_const", const="VCF", help="Input files are VCF format")
     mutex_group.add_argument("--maf", dest="file_type", action="store_const", const="MAF", help="Input files are MAF format")
@@ -350,5 +389,5 @@ if __name__ == '__main__':
     parser.add_argument('-P', '--plot', action='store_true', dest='plot', default=True, help='Whether to plot percentages')
     args=parser.parse_args()
     ref_fasta = cmo.util.genomes[args.reference]['fasta']
-    main(args.ref_file, args.test_file, args.file_type, ref_fasta, args.bedfile, args.normalize, args.prefix, args.plot, args.log_level)
+    main(args.ref_file, args.test_file, args.first, args.second, args.file_type, ref_fasta, args.bedfile, args.normalize, args.prefix, args.plot, args.log_level)
 

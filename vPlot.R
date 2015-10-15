@@ -9,56 +9,43 @@ library(reshape)
 
 get.percentages = function(Missed_SNP, Novel_SNP, Correct_SNP_Genotype, Incorrect_SNP_Genotype, 
                            Missed_INDEL,  Novel_INDEL, Correct_INDEL_Genotype, Incorrect_INDEL_Genotype,  
-                           Total_Truth_SNPs,	Total_Truth_INDELs, Total_Test_SNPs, Total_Test_INDELs){
+                           Union_SNPs, Union_INDELs){
   
-  if(Total_Truth_SNPs == 0){
-    
-    PC_Missed_SNP =0
-    PC_Correct_SNP_Genotype =0
-    PC_Incorrect_SNP_Genotype =0
+  if(Union_SNPs == 0){   
+    PC_Missed_SNP = 0
+    PC_Correct_SNP_Genotype = 0
+    PC_Incorrect_SNP_Genotype = 0
   }
   
-  if(Total_Truth_INDELs == 0){
-    
-    PC_Missed_INDEL =0
-    PC_Correct_INDEL_Genotype =0
-    PC_Incorrect_INDEL_Genotype =0
+  if(Union_INDELs == 0){  
+    PC_Missed_INDEL = 0
+    PC_Correct_INDEL_Genotype = 0
+    PC_Incorrect_INDEL_Genotype = 0
   }
   
-  if(Total_Test_SNPs == 0){
-    
-    PC_Novel_SNP =0
+  if(Union_SNPs == 0){PC_Novel_SNP = 0}
+  if(Union_INDELs == 0){PC_Novel_INDEL = 0}
+  
+  if(Union_SNPs > 0){
+    PC_Missed_SNP = (Missed_SNP / Union_SNPs) * 100
+    PC_Correct_SNP_Genotype = (Correct_SNP_Genotype / Union_SNPs) * 100
+    PC_Incorrect_SNP_Genotype = (Incorrect_SNP_Genotype / Union_SNPs) * 100
   }
   
-  if(Total_Test_INDELs == 0){
-    
-    PC_Novel_INDEL =0
-  }
-  
-  if(Total_Truth_SNPs > 0){
-    PC_Missed_SNP = (Missed_SNP / Total_Truth_SNPs) *100
-    PC_Correct_SNP_Genotype = (Correct_SNP_Genotype / Total_Truth_SNPs) *100
-    PC_Incorrect_SNP_Genotype = (Incorrect_SNP_Genotype / Total_Truth_SNPs) *100
-  }
-  
-  if(Total_Truth_INDELs > 0){
-    PC_Missed_INDEL = (Missed_INDEL / Total_Truth_INDELs) *100
-    PC_Correct_INDEL_Genotype = (Correct_INDEL_Genotype / Total_Truth_INDELs) *100
-    PC_Incorrect_INDEL_Genotype =  (Incorrect_INDEL_Genotype / Total_Truth_INDELs) *100
+  if(Union_INDELs > 0){
+    PC_Missed_INDEL = (Missed_INDEL / Union_INDELs) * 100
+    PC_Correct_INDEL_Genotype = (Correct_INDEL_Genotype / Union_INDELs) * 100
+    PC_Incorrect_INDEL_Genotype =  (Incorrect_INDEL_Genotype / Union_INDELs) * 100
   }
   
   ###################################################################################################################
-  ###################################################################################################################
   
-  if(Total_Test_SNPs > 0){
-    PC_Novel_SNP = (Novel_SNP / Total_Test_SNPs) *100
-  }
+  if(Union_SNPs > 0){
+    PC_Novel_SNP = (Novel_SNP / Union_SNPs) *100 }
   
-  if(Total_Test_INDELs > 0){
-    PC_Novel_INDEL = (Novel_INDEL / Total_Test_INDELs) *100
-  }
+  if(Union_INDELs > 0){
+    PC_Novel_INDEL = (Novel_INDEL / Union_INDELs) *100 }
   
-  ###################################################################################################################
   ###################################################################################################################
   
   list(PC_Missed_SNP,
@@ -68,9 +55,8 @@ get.percentages = function(Missed_SNP, Novel_SNP, Correct_SNP_Genotype, Incorrec
        PC_Missed_INDEL,
        PC_Novel_INDEL,
        PC_Correct_INDEL_Genotype,
-       PC_Incorrect_INDEL_Genotype)
+       PC_Incorrect_INDEL_Genotype) 
 }
-
 
 #####################################################################################################################
 #####################################################################################################################
@@ -88,12 +74,13 @@ samples[,c('Missed SNP',
            'Novel INDEL',
            'Correct INDEL Genotype' ,
            'Incorrect INDEL Genotype'):=get.percentages(Missed_SNP, Novel_SNP, Correct_SNP_Genotype, Incorrect_SNP_Genotype, 
-                                                        Missed_INDEL,  Novel_INDEL, Correct_INDEL_Genotype, Incorrect_INDEL_Genotype,	
-                                                        Total_Truth_SNPs,	Total_Truth_INDELs, Total_Test_SNPs, Total_Test_INDELs), by=1:nrow(samples)]
+                                                        Missed_INDEL,  Novel_INDEL, Correct_INDEL_Genotype, Incorrect_INDEL_Genotype,  
+                                                        Union_SNPs, Union_INDELs), by=1:nrow(samples)]
 
 sample = melt(samples, id.vars=c('sample'), measure.vars=c('Missed SNP', 'Novel SNP', 'Correct SNP Genotype', 'Incorrect SNP Genotype',  
-                                                           'Missed INDEL', 'Correct INDEL Genotype', 'Incorrect INDEL Genotype'))
-
+                                                           'Missed INDEL', 'Novel INDEL', 'Correct INDEL Genotype', 'Incorrect INDEL Genotype'))
+##print(samples)
+##print(sample)
 
 my.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +  
   geom_bar(stat = 'identity', position = 'dodge')  +
