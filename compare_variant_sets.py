@@ -17,7 +17,6 @@ import atexit
 from collections import defaultdict
 
 
-
 MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.6.2/maf2vcf.pl'
 BEDTOOLS_LOCATION = '/opt/common/CentOS_6/bedtools/bedtools-2.22.0/bin/bedtools'
 
@@ -208,7 +207,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
 
 
         print 'Loops through each test call to get get the totals for SNPs and INDELs called'
-        for site, test_record in test_chrom_pos_dict.items():
+        for site, test_record in test_chrom_pos_dict.items():                
             if isinstance(test_record, list):
                 logger.critical("Skipping site with multiple variant calls")
                 logger.critical(site)
@@ -223,6 +222,13 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                 logger.critical("Bailing out")
                 sys.exit(1)
 
+            if len(test_record.get_hom_alts()) > 0:
+                site_depth = test_record.get_hom_alts()[0]['DP']
+                site_cnt = max(test_record.get_hom_alts()[0]['AD'])
+            else: 
+                site_depth = test_record.get_hets()[0]['DP']
+                site_cnt = max(test_record.get_hets()[0]['AD'])
+                
             for sample in test_samples:
                 if test_record.genotype(sample).gt_type !=0: #if not reference genotype
                     
@@ -239,7 +245,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                     if test_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
                         pass #do nothing
                     else:
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
                         details.write(line)
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
@@ -261,6 +267,13 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                 logger.critical(truth_record)
                 logger.critical("Bailing out")
                 sys.exit(1)
+                
+            if len(truth_record.get_hom_alts()) > 0:
+                site_depth = truth_record.get_hom_alts()[0]['DP']
+                site_cnt = max(truth_record.get_hom_alts()[0]['AD'])
+            else: 
+                site_depth = truth_record.get_hets()[0]['DP']
+                site_cnt = max(truth_record.get_hets()[0]['AD'])
 
             for sample in truth_samples:
                 if truth_record.genotype(sample).gt_type !=0: #if not reference genotype
@@ -277,7 +290,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                     if truth_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
                         pass #do nothing
                     else:
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
                         details.write(line)
 
                         if key not in sample_statistics[sample]:
@@ -297,7 +310,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                     test_genotype = re.split("[/|]", test_record.genotype(sample).gt_bases)
                     if set(truth_genotype) == set(test_genotype):
                         key = "Correct_%s_Genotype" % site_type
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
                         details.write(line)
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
@@ -305,7 +318,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                             sample_statistics[sample][key]+=1
                     elif test_record.genotype(sample).gt_type !=0:
                         key = "Incorrect_%s_Genotype" % site_type
-                        line = '%s\t%s\t%s\t%s\n'%(site_type, site, key, sample)
+                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
                         details.write(line)
                         if key not in sample_statistics[sample]:
                             sample_statistics[sample][key]=1
@@ -355,7 +368,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
         ofh.write('%s\t%s\t%s\t%s\t%s\t%s\n'%('\t'.join(line), snps_union, indels_union, my_date, my_time, prefix))
     ofh.close()
         
-    cmd = ['%s/vPlot.R'%(os.path.dirname(os.path.realpath(__file__))), '%s.out'%(prefix), prefix]
+    cmd = ['%s/vPlot.R'%(os.path.dirname(os.path.realpath(__file__))), '%s.out'%(prefix), '%s_details.out'%(prefix), prefix]
     subprocess.call(cmd)
 
 
