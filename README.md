@@ -1,3 +1,6 @@
+![VCFs are Great](http://i.imgur.com/E8gfNu0.gif "Aww Yeah Accuracy Time!")
+
+
 Install some Libs
 =================
 
