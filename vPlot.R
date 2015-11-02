@@ -113,7 +113,7 @@ breakdown.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +
         legend.position='right') +
   labs(x='', y='Percentage of variants')
 
-CairoPNG(paste(prefix,'_percentages.png'), sep='',units='px',w=800,h=600)
+CairoPNG(paste(prefix,'percentages.png',sep=''),units='px',w=800,h=600)
 breakdown.plot
 dev.off()
 
@@ -135,7 +135,7 @@ detail.plot = ggplot(detail, aes(y=value, x =Class)) +
         legend.position='none') +
   labs(y='Allelic Fraction')
 
-CairoPNG(paste(prefix,'_allelicFractions.png'), sep='',units='px',w=800,h=600)
+CairoPNG(paste(prefix,'allelicFractions.png',sep='_'),units='px',w=800,h=600)
 detail.plot
 dev.off()
 
@@ -169,7 +169,7 @@ confusion.plot <- ggplot(confusion.norm, aes(as.factor(Var1), Var2, group=Var2))
         legend.title = element_text(size=15, face='bold')) +
   labs(x='', y='')
 
-CairoPNG(paste(prefix,'_confusion.png'), sep='',units='px',w=800,h=600)
+CairoPNG(paste(prefix,'confusion.png',sep='_'),units='px',w=800,h=600)
 confusion.plot
 dev.off()
 

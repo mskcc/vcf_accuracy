@@ -16,10 +16,9 @@ import vcf
 import atexit
 from collections import defaultdict
 
-
-MAF2VCF_LOCATION = '/opt/common/CentOS_6/vcf2maf/v1.6.2/maf2vcf.pl'
-BEDTOOLS_LOCATION = '/opt/common/CentOS_6/bedtools/bedtools-2.22.0/bin/bedtools'
-
+# Use cmo.util to locate the default maf2vcf script and bedtools binary
+MAF2VCF_LOCATION = cmo.util.programs['vcf2maf']['default'] + "maf2vcf.pl"
+BEDTOOLS_LOCATION = cmo.util.programs['bedtools']['default'] + "bedtools"
 
 DIRS_TO_CLEANUP = []
 #@atexit.register
@@ -32,7 +31,6 @@ def cleanup():
             logger.info("Wanted to cleanup %s, but doesn't exist or isn't a directory" % file)
 
 
-
 def cleanup_files_later(file):
     global DIRS_TO_CLEANUP
     if file not in DIRS_TO_CLEANUP:
@@ -40,27 +38,18 @@ def cleanup_files_later(file):
 
 
 def check_for_programs():
-
     for f in [MAF2VCF_LOCATION]:
-
         if not os.path.exists(f):
-            logger.critical('Unable to find required tool')
-            logger.critical('File name not found: %s'%(f))
-            logger.critical('Check constants at the top of compareVariants.py exist')
+            logger.critical('Unable to find required tool: %s'%(f))
             sys.exit(1)
 
 #####################################################
 #####################################################
 
-#Want to repalce this with the cmo python wrapper
-#Uses an older version maf2vcf and doesn't like hg19
- 
 def convert_maf_to_vcf(maf, vcf_dir, reference):
 
     reference = reference.encode('ascii','ignore')
-    #cmd = ['perl', MAF2VCF_LOCATION, '--input-maf', maf, '--output-dir', vcf_dir, '--ref-fasta', ref_fasta] #need to fix the reference
-
-    cmd = ['perl', MAF2VCF_LOCATION, '--input-maf', maf, '--output-dir', vcf_dir]
+    cmd = ['perl', MAF2VCF_LOCATION, '--input-maf', maf, '--output-dir', vcf_dir, '--ref-fasta', reference, '--per-tn-vcfs']
     logger.debug('Running:' + ' '.join(cmd))
     subprocess.call(cmd)
 
@@ -71,7 +60,6 @@ def compare_samples(truth, test):
 
     truth = [each.split('/')[1] for each in truth]
     test = [each.split('/')[1] for each in test]
-
 
     not_in_truth = set(test).difference(set(truth))
 
@@ -163,7 +151,6 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
     truth = glob.glob('truth_vcfs/*.vcf')
     vcfs = compare_samples(truth, test)
 
-    
     print 'subsetting'
     if bedfile != None:
         for v in vcfs:
@@ -173,7 +160,6 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
         test = glob.glob('test_vcfs/*subset.vcf')
         truth = glob.glob('truth_vcfs/*subset.vcf')
         vcfs = compare_samples(truth, test)
-
 
     print 'normalization'
     if normalize:
@@ -224,10 +210,10 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
 
             if len(test_record.get_hom_alts()) > 0:
                 site_depth = test_record.get_hom_alts()[0]['DP']
-                site_cnt = max(test_record.get_hom_alts()[0]['AD'])
+                site_cnt = test_record.get_hom_alts()[0]['AD'][1]
             else: 
                 site_depth = test_record.get_hets()[0]['DP']
-                site_cnt = max(test_record.get_hets()[0]['AD'])
+                site_cnt = test_record.get_hets()[0]['AD'][1]
                 
             for sample in test_samples:
                 if test_record.genotype(sample).gt_type !=0: #if not reference genotype
@@ -270,10 +256,10 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                 
             if len(truth_record.get_hom_alts()) > 0:
                 site_depth = truth_record.get_hom_alts()[0]['DP']
-                site_cnt = max(truth_record.get_hom_alts()[0]['AD'])
+                site_cnt = truth_record.get_hom_alts()[0]['AD'][1]
             else: 
                 site_depth = truth_record.get_hets()[0]['DP']
-                site_cnt = max(truth_record.get_hets()[0]['AD'])
+                site_cnt = truth_record.get_hets()[0]['AD'][1]
 
             for sample in truth_samples:
                 if truth_record.genotype(sample).gt_type !=0: #if not reference genotype
@@ -401,6 +387,5 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column')
     parser.add_argument('-P', '--plot', action='store_true', dest='plot', default=True, help='Whether to plot percentages')
     args=parser.parse_args()
-    ref_fasta = cmo.util.genomes[args.reference]['fasta']
+    ref_fasta = cmo.util.genomes[args.reference]['fasta_vep']
     main(args.ref_file, args.test_file, args.first, args.second, args.file_type, ref_fasta, args.bedfile, args.normalize, args.prefix, args.plot, args.log_level)
-

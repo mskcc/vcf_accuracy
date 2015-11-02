@@ -22,7 +22,7 @@ def convert_dmp_to_maf(dmp_file, out_prefix):
 #                    'N_TotalDepth', 'N_RefCount', 'N_AltCount', 'N_AltFreq', 'T_TotalDepth', 'T_RefCount', 'T_AltCount', 'T_AltFreq', 'T_Ref+', 'T_Ref-', 'T_Alt+', 'T_Alt-', 
 #                    'All_N_Aggregate_AlleleDepth', 'All_N_Median_AlleleFreq', 'T_freq/All_N_Freq', 'Occurence_in_Normals', 's_DL_scco_015_N']  
         
-    maf_columns = ['Hugo_Symbol', 'Entrez_Gene_ID', 'Center', 'NCBI_Build', 'Chromosome', 'Start_Position', 'End_Position', 'Strand', 'Variant_Classification', 'Variant_Type', 'Reference_Allele', 'Tumor_Seq_Allele1', 'Tumor_Seq_Allele2', 'dbSNP_RS','Tumor_Sample_Barcode', 'Matched_Norm_Sample_Barcode', 'Match_Norm_Seq_Allele1', 'Match_Norm_Seq_Allele2', 't_depth', 't_ref_count', 't_alt_count', 'n_depth', 'n_ref_count' 'n_alt_count']
+    maf_columns = ['Hugo_Symbol', 'Entrez_Gene_ID', 'Center', 'NCBI_Build', 'Chromosome', 'Start_Position', 'End_Position', 'Strand', 'Variant_Classification', 'Variant_Type', 'Reference_Allele', 'Tumor_Seq_Allele1', 'Tumor_Seq_Allele2', 'dbSNP_RS','Tumor_Sample_Barcode', 'Matched_Norm_Sample_Barcode', 'Match_Norm_Seq_Allele1', 'Match_Norm_Seq_Allele2', 't_depth', 't_ref_count', 't_alt_count', 'n_depth', 'n_ref_count', 'n_alt_count']
     
 #     Read and format DMP input
     dmp_reader = pd.read_csv(dmp_file, delimiter="\t")
@@ -73,7 +73,7 @@ def convert_dmp_to_maf(dmp_file, out_prefix):
         
         hugo_symbol = row['Gene']
         entrez_gene_id = "0"
-        center = "bio.mskcc.org"
+        center = "cmo.mskcc.org"
         ncbi_build = "GRCh37"
         chromosome = row['Chrom']
         strand = "+"
