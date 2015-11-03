@@ -111,7 +111,7 @@ breakdown.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +
         legend.text  = element_text(size=12), 
         legend.title = element_text(size=15, face='bold'), 
         legend.position='right') +
-  labs(x='', y='Percentage of variants')
+  labs(x='', y='Percentage of Variants')
 
 CairoPNG(paste(prefix,'_percentages.png'), sep='',units='px',w=800,h=600)
 breakdown.plot
@@ -154,7 +154,7 @@ confusion.norm <- (confusion / colSums(confusion)[col(confusion)])
 confusion.norm <- as.data.frame(as.table(confusion.norm))
 confusion <- as.data.frame(as.table(confusion))
 
-pal <- colorRampPalette(c("white", "darkred"))
+pal <- colorRampPalette(c("white", "red"))
 confusion.plot <- ggplot(confusion.norm, aes(as.factor(Var1), Var2, group=Var2)) + 
   geom_tile(aes(x=Var1, y=Var2, fill=Freq)) + 
   geom_text(aes(fill =confusion.norm$Freq, label=round(confusion$Freq, 2)), size=12, fontface='bold') +
