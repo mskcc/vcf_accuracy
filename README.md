@@ -1,3 +1,6 @@
+![VCFs are Great](http://i.imgur.com/E8gfNu0.gif "Aww Yeah Accuracy Time!")
+
+
 Install some Libs
 =================
 
@@ -29,9 +32,7 @@ MAF input requirements
     Sequence_Source, Validation_Method, Score, BAM_File, Sequencer
 
 * Requires MSKCC specific columns:
-  * n_ref_count, n_var_count, n_depth, t_var_count, t_ref_count, t_depth
-
-
+  * n_ref_count, n_alt_count, n_depth, t_alt_count, t_ref_count, t_depth
 
 * If subsetting the bedfile chromosome labelling must match the variant file style chr1 vs. 1, MT vs. M etc.
 * Pre-normalized datasets must be left aligned and processed using VT (http://genome.sph.umich.edu/wiki/Vt).
