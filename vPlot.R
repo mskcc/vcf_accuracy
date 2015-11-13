@@ -80,7 +80,8 @@ breakdown = args[1]
 details = args[2]
 prefix = args[3]
 samples = fread(breakdown)
-samples.details = fread(details)
+details.cmd = paste0("grep -v ^# ", details)
+samples.details = fread(details.cmd)
 
 samples[,c('Missed SNP', 
            'Novel SNP', 

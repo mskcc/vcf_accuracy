@@ -197,6 +197,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
             if isinstance(test_record, list):
                 logger.critical("Skipping site with multiple variant calls")
                 logger.critical(site)
+                details.write("#Multiple calls: %s" % site)
                 continue
             elif test_record.is_snp:
                 site_type="SNP"
@@ -243,6 +244,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
             if isinstance(truth_record, list):
                 logger.critical("Skipping site with multiple variant calls")
                 logger.critical(site)
+                details.write("#Multiple calls: %s" % site)
                 continue
             elif truth_record.is_snp:
                 site_type="SNP"
