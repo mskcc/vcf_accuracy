@@ -94,7 +94,7 @@ samples[,c('Missed SNP',
                                                         Missed_INDEL,  Novel_INDEL, Correct_INDEL_Genotype, Incorrect_INDEL_Genotype,  
                                                         Union_SNPs, Union_INDELs), by=1:nrow(samples)]
 
-NORMAL_TAGS <- c('NORMAL', 'Normal', '_N$')
+NORMAL_TAGS <- c('NORMAL', 'Normal', '_N[0-9]*$')
 samples <- samples[-mgrep(NORMAL_TAGS, sample), ]
 
 sample = melt(samples, id.vars=c('sample'), measure.vars=c('Missed SNP', 'Novel SNP', 'Correct SNP Genotype', 'Incorrect SNP Genotype',  
@@ -111,7 +111,7 @@ breakdown.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +
         axis.title   = element_text(size=15),
         legend.text  = element_text(size=12), 
         legend.title = element_text(size=15, face='bold'), 
-        legend.position='right') +
+        legend.position='none') +
   labs(x='', y='Percentage of Variants')
 
 CairoPNG(paste(prefix,'percentages.png',sep=''),units='px',w=800,h=600)
