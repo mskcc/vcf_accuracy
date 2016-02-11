@@ -389,5 +389,5 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column')
     parser.add_argument('-P', '--plot', action='store_true', dest='plot', default=True, help='Whether to plot percentages')
     args=parser.parse_args()
-    ref_fasta = cmo.util.genomes[args.reference]['fasta_vep']
+    ref_fasta = cmo.util.genomes[args.reference]['fasta']
     main(args.ref_file, args.test_file, args.first, args.second, args.file_type, ref_fasta, args.bedfile, args.normalize, args.prefix, args.plot, args.log_level)
