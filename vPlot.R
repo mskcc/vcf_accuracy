@@ -80,8 +80,7 @@ breakdown = args[1]
 details = args[2]
 prefix = args[3]
 samples = fread(breakdown)
-details.cmd = paste0("grep -v ^# ", details)
-samples.details = fread(details.cmd)
+samples.details = fread(details)
 
 samples[,c('Missed SNP', 
            'Novel SNP', 
@@ -114,11 +113,13 @@ breakdown.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +
         legend.position='none') +
   labs(x='', y='Percentage of Variants')
 
-CairoPNG(paste(prefix,'percentages.png',sep=''),units='px',w=800,h=600)
+CairoPNG(paste(prefix,'_percentages.png'), sep='',units='px',w=800,h=600)
 breakdown.plot
 dev.off()
 
 setnames(samples.details, c('Type', 'Coordinates', 'Class', 'Sample', 'DP', 'AD'))
+samples.details$DP <- as.numeric(samples.details$DP)
+samples.details$AD <- as.numeric(samples.details$AD)
 samples.details[, AF := (AD / DP)]
 
 detail = melt(samples.details, id.vars='Class', measure.vars='AF')
@@ -136,7 +137,7 @@ detail.plot = ggplot(detail, aes(y=value, x =Class)) +
         legend.position='none') +
   labs(y='Allelic Fraction')
 
-CairoPNG(paste(prefix,'allelicFractions.png',sep='_'),units='px',w=800,h=600)
+CairoPNG(paste(prefix,'_allelicFractions.png'), sep='',units='px',w=800,h=600)
 detail.plot
 dev.off()
 
@@ -170,7 +171,7 @@ confusion.plot <- ggplot(confusion.norm, aes(as.factor(Var1), Var2, group=Var2))
         legend.title = element_text(size=15, face='bold')) +
   labs(x='', y='')
 
-CairoPNG(paste(prefix,'confusion.png',sep='_'),units='px',w=800,h=600)
+CairoPNG(paste(prefix,'_confusion.png'), sep='',units='px',w=800,h=600)
 confusion.plot
 dev.off()
 
