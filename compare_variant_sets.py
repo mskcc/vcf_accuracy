@@ -141,10 +141,11 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
         convert_maf_to_vcf(ref_vcf, 'truth_vcfs', reference) #would prefer to call on cmo wrappper
         convert_maf_to_vcf(test_vcf, 'test_vcfs', reference) #would prefer to call on cmo wrappper
     else:
-        os.mkdir("truth_vcfs")
-        os.mkdir("test_vcfs")
+        for dirname in [ 'truth_vcfs', 'test_vcfs' ]:
+            if not os.path.exists( dirname ):
+                os.mkdir( dirname )
         shutil.copy(test_vcf, "test_vcfs")
-        shutil.copy(truth_vcf, "truth_vcfs")
+        shutil.copy(ref_vcf, "truth_vcfs")
     cleanup_files_later(os.path.abspath("truth_vcfs"))
     cleanup_files_later(os.path.abspath("test_vcfs"))
     test = glob.glob('test_vcfs/*.vcf')
