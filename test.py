@@ -25,14 +25,12 @@ class TestsForNose:
             environ['TMPDIR'] = tmp_dir
 
         # Build commands to run the tool on datasets included in the repo
-        self.mafdir = mkdtemp()
         cmd_maf = [ sys.executable, tool,
             '--maf', '--normalize', '--reference', 'GRCh37',
             '--first-file', tool_dir + '/data/truth.maf',
             '--second-file', tool_dir + '/data/test.maf',
             '--first-prefix', 'truth_set',
             '--second-prefix', 'test_set' ]
-        self.vcfdir = mkdtemp()
         cmd_vcf = [ sys.executable, tool,
             '--vcf', '--normalize', '--reference', 'GRCh37',
             '--first-file', tool_dir + '/data/truth.vcf',
@@ -42,11 +40,13 @@ class TestsForNose:
 
         # Run those commands as shell commands
         try:
+            self.mafdir = mkdtemp()
             chdir( self.mafdir )
             self.cmd_maf_ret = call( cmd_maf, shell = False )
         except OSError as e:
             print >>sys.stderr, "Execution failed:", e
         try:
+            self.vcfdir = mkdtemp()
             chdir( self.vcfdir )
             self.cmd_vcf_ret = call( cmd_vcf, shell = False )
         except OSError as e:

@@ -93,14 +93,11 @@ samples[,c('Missed SNP',
                                                         Missed_INDEL,  Novel_INDEL, Correct_INDEL_Genotype, Incorrect_INDEL_Genotype,  
                                                         Union_SNPs, Union_INDELs), by=1:nrow(samples)]
 
-NORMAL_TAGS <- c('NORMAL', 'Normal', '_N[0-9]*$')
-samples <- samples[-mgrep(NORMAL_TAGS, sample), ]
+# NORMAL_TAGS <- c('NORMAL', 'Normal', '_N[0-9]*$')
+# samples <- samples[-mgrep(NORMAL_TAGS, sample), ]
 
 sample = melt(samples, id.vars=c('sample'), measure.vars=c('Missed SNP', 'Novel SNP', 'Correct SNP Genotype', 'Incorrect SNP Genotype',  
                                                            'Missed INDEL', 'Novel INDEL', 'Correct INDEL Genotype', 'Incorrect INDEL Genotype'))
-
-##print(samples)
-##print(sample)
 
 breakdown.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +  
   geom_bar(stat = 'identity', position = 'dodge')  +
@@ -113,7 +110,7 @@ breakdown.plot = ggplot(sample, aes(y=value, x =variable, fill =sample)) +
         legend.position='none') +
   labs(x='', y='Percentage of Variants')
 
-CairoPNG(paste(prefix,'_percentages.png'), sep='',units='px',w=800,h=600)
+CairoPNG(paste(prefix,'_percentages.png', sep=''),units='px',w=800,h=600)
 breakdown.plot
 dev.off()
 
@@ -137,7 +134,7 @@ detail.plot = ggplot(detail, aes(y=value, x =Class)) +
         legend.position='none') +
   labs(y='Allelic Fraction')
 
-CairoPNG(paste(prefix,'_allelicFractions.png'), sep='',units='px',w=800,h=600)
+CairoPNG(paste(prefix,'_allelicFractions.png', sep=''),units='px',w=800,h=600)
 detail.plot
 dev.off()
 
@@ -171,9 +168,6 @@ confusion.plot <- ggplot(confusion.norm, aes(as.factor(Var1), Var2, group=Var2))
         legend.title = element_text(size=15, face='bold')) +
   labs(x='', y='')
 
-CairoPNG(paste(prefix,'_confusion.png'), sep='',units='px',w=800,h=600)
+CairoPNG(paste(prefix,'_confusion.png', sep=''),units='px',w=800,h=600)
 confusion.plot
 dev.off()
-
-
-

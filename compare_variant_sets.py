@@ -63,14 +63,10 @@ def compare_samples(truth, test):
 
     not_in_truth = set(test).difference(set(truth))
 
+    # If there's a few samples of difference, then limit our analysis to just the subset
     if len(not_in_truth) > 0:
-        logger.critical('T/N Samples in test data not found in truth set')
-        logger.critical(list(not_in_truth))
         test_new = [x for x in test if x not in not_in_truth] #remove multisample VCF, FIXME
         return test_new
-        #return test
-        #sys.exit(1)
-
     else:
         return test
 
@@ -129,7 +125,6 @@ def get_file_type():
 
 def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normalize, prefix, plot, log_level):
 
-
     global logger
     logger = configure_logging(log_level)
     
@@ -138,14 +133,14 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
     check_for_programs()
     if file_type=="MAF":
         print 'converting maf to vcf'
-        convert_maf_to_vcf(ref_vcf, 'truth_vcfs', reference) #would prefer to call on cmo wrappper
-        convert_maf_to_vcf(test_vcf, 'test_vcfs', reference) #would prefer to call on cmo wrappper
+        convert_maf_to_vcf(ref_vcf, 'truth_vcfs', reference) #would prefer to call on cmo wrapper
+        convert_maf_to_vcf(test_vcf, 'test_vcfs', reference) #would prefer to call on cmo wrapper
     else:
         for dirname in [ 'truth_vcfs', 'test_vcfs' ]:
             if not os.path.exists( dirname ):
                 os.mkdir( dirname )
-        shutil.copy(test_vcf, "test_vcfs")
-        shutil.copy(ref_vcf, "truth_vcfs")
+        shutil.copy(test_vcf, "test_vcfs/sample.vcf")
+        shutil.copy(ref_vcf, "truth_vcfs/sample.vcf")
     cleanup_files_later(os.path.abspath("truth_vcfs"))
     cleanup_files_later(os.path.abspath("test_vcfs"))
     test = glob.glob('test_vcfs/*.vcf')
@@ -193,7 +188,7 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
         my_time = datetime.datetime.now().strftime('%H:%M:%S')
 
 
-        print 'Loops through each test call to get get the totals for SNPs and INDELs called'
+        print 'Loops through each test call to get the totals for SNPs and INDELs called'
         for site, test_record in test_chrom_pos_dict.items():                
             if isinstance(test_record, list):
                 logger.critical("Skipping site with multiple variant calls")
@@ -295,8 +290,8 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                     logger.critical("Change code to handle this!")
                     sys.exit(1)
                 for sample in truth_samples:
-                    truth_genotype = re.split("[/|]", truth_record.genotype(sample).gt_bases)
-                    test_genotype = re.split("[/|]", test_record.genotype(sample).gt_bases)
+                    truth_genotype = re.split('[/|]', truth_record.genotype(sample).gt_bases)
+                    test_genotype = re.split('[/|]', test_record.genotype(sample).gt_bases)
                     if set(truth_genotype) == set(test_genotype):
                         key = "Correct_%s_Genotype" % site_type
                         line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
@@ -372,7 +367,7 @@ def configure_logging(log_level):
     logger.addHandler(ch)
     return logger
 
-
+# If this module is run as a script in CLI, the flow of control starts here
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Takes in two test files and evaluates the test file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -381,11 +376,11 @@ if __name__ == '__main__':
     parser.add_argument('--first-prefix', action='store', dest='first', default='First', help='Prefix for first file output')
     parser.add_argument('--second-prefix', action='store', dest='second', default='Second', help='Prefix for second file output.')
     mutex_group = parser.add_mutually_exclusive_group(required=True)
-    mutex_group.add_argument("--vcf", dest="file_type", action="store_const", const="VCF", help="Input files are VCF format")
-    mutex_group.add_argument("--maf", dest="file_type", action="store_const", const="MAF", help="Input files are MAF format")
+    mutex_group.add_argument('--vcf', action='store_const', dest='file_type', const='VCF', help='Input files are VCF format')
+    mutex_group.add_argument('--maf', action='store_const', dest='file_type', const='MAF', help='Input files are MAF format')
     parser.add_argument('--reference', choices=cmo.util.genomes.keys(), required=True)
     parser.add_argument('--bedfile', action='store', dest='bedfile', default=None, help='Optional bedfile to limit the regions of comparison')
-    parser.add_argument('--normalize', action='store_true', dest='normalize', default=False, help="Normalize variants with VT?" )
+    parser.add_argument('--normalize', action='store_true', dest='normalize', default=False, help='Normalize calls with bcftools/vt?' )
     parser.add_argument('-d', '--debug', action='store_const', const=logging.DEBUG, dest='log_level', default=logging.INFO, help='Turn on debug output')
     parser.add_argument('-p', '--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column')
     parser.add_argument('-P', '--plot', action='store_true', dest='plot', default=True, help='Whether to plot percentages')
