@@ -21,7 +21,7 @@ MAF2VCF_LOCATION = cmo.util.programs['vcf2maf']['default'] + "maf2vcf.pl"
 BEDTOOLS_LOCATION = cmo.util.programs['bedtools']['default'] + "bedtools"
 
 DIRS_TO_CLEANUP = []
-#@atexit.register
+@atexit.register
 def cleanup():
     for file in DIRS_TO_CLEANUP:
         if os.path.exists(file) and os.path.isdir(file):
@@ -38,7 +38,7 @@ def cleanup_files_later(file):
 
 
 def check_for_programs():
-    for f in [MAF2VCF_LOCATION]:
+    for f in [MAF2VCF_LOCATION, BEDTOOLS_LOCATION]:
         if not os.path.exists(f):
             logger.critical('Unable to find required tool: %s'%(f))
             sys.exit(1)
@@ -56,16 +56,15 @@ def convert_maf_to_vcf(maf, vcf_dir, reference):
 ###################################################
 ###################################################
 
-def compare_samples(truth, test):
+def common_samples(truth, test):
 
-    truth = [each.split('/')[1] for each in truth]
-    test = [each.split('/')[1] for each in test]
-
-    not_in_truth = set(test).difference(set(truth))
+    truth = [each.split('/')[-1] for each in truth]
+    test = [each.split('/')[-1] for each in test]
 
     # If there's a few samples of difference, then limit our analysis to just the subset
+    not_in_truth = set(test).difference(set(truth))
     if len(not_in_truth) > 0:
-        test_new = [x for x in test if x not in not_in_truth] #remove multisample VCF, FIXME
+        test_new = [x for x in test if x not in not_in_truth]
         return test_new
     else:
         return test
@@ -74,7 +73,7 @@ def compare_samples(truth, test):
 ###################################################
 
 def subset_data(vcf, bedfile):
-    
+
     outfile = vcf.replace('.vcf','.subset.vcf')
     cmd = [BEDTOOLS_LOCATION, 'intersect', '-header', '-a', vcf, '-b', bedfile]
     logger.debug('Running' + ' '.join(cmd))
@@ -123,61 +122,64 @@ def get_file_type():
 ###################################################
 
 
-def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normalize, prefix, plot, log_level):
+def main(ref_file, test_file, first, second, file_type, outdir, reference, bedfile, normalize, prefix, plot, log_level):
 
     global logger
     logger = configure_logging(log_level)
-    
-    details = open('%s_details.out'%(prefix), 'w')
+
+    # Create the output folder if it doesn't already exist
+    if not os.path.exists( outdir ):
+        os.mkdir( outdir )
+    details = open('%s/%s_details.out'%(outdir,prefix), 'w')
 
     check_for_programs()
+    [test, truth] = [[], []]
     if file_type=="MAF":
-        print 'converting maf to vcf'
-        convert_maf_to_vcf(ref_vcf, 'truth_vcfs', reference) #would prefer to call on cmo wrapper
-        convert_maf_to_vcf(test_vcf, 'test_vcfs', reference) #would prefer to call on cmo wrapper
+        logger.info("Converting MAFs to VCFs")
+        convert_maf_to_vcf(ref_file, 'truth_vcfs', reference)
+        convert_maf_to_vcf(test_file, 'test_vcfs', reference)
     else:
         for dirname in [ 'truth_vcfs', 'test_vcfs' ]:
             if not os.path.exists( dirname ):
                 os.mkdir( dirname )
-        shutil.copy(test_vcf, "test_vcfs/sample.vcf")
-        shutil.copy(ref_vcf, "truth_vcfs/sample.vcf")
+        shutil.copy(test_file, "test_vcfs/sample.vcf")
+        shutil.copy(ref_file, "truth_vcfs/sample.vcf")
     cleanup_files_later(os.path.abspath("truth_vcfs"))
     cleanup_files_later(os.path.abspath("test_vcfs"))
     test = glob.glob('test_vcfs/*.vcf')
     truth = glob.glob('truth_vcfs/*.vcf')
-    vcfs = compare_samples(truth, test)
+    vcfs = common_samples(truth, test)
 
-    print 'subsetting'
-    if bedfile != None:
+    if bedfile is not None:
+        logger.info("Subsetting samples to bedfile")
         for v in vcfs:
-            subset_data('truth_vcfs/%s'%(v), bedfile)
             subset_data('test_vcfs/%s'%(v), bedfile)
+            subset_data('truth_vcfs/%s'%(v), bedfile)
 
         test = glob.glob('test_vcfs/*subset.vcf')
         truth = glob.glob('truth_vcfs/*subset.vcf')
-        vcfs = compare_samples(truth, test)
+        vcfs = common_samples(truth, test)
 
-    print 'normalization'
     if normalize:
+        logger.info("Normalizing indels using bcftools/vt")
         for v in vcfs:
             test = cmo.util.normalize_vcf('truth_vcfs/%s'%(v), reference)
             truth = cmo.util.normalize_vcf('test_vcfs/%s'%(v), reference)
         test = glob.glob('test_vcfs/*.normalized.vcf.gz')
         truth = glob.glob('truth_vcfs/*.normalized.vcf.gz')
-        vcfs = compare_samples(truth, test)
-    
+        vcfs = common_samples(truth, test)
 
-    print 'reading in vcfs'
+    logger.info("Reading in VCFs")
     sample_statistics = defaultdict(dict)
     truth_totals = defaultdict(dict)
     test_totals = defaultdict(dict)
-    
+
     for v in vcfs:
-        print v
-        logger.info("Reading in VCF")
         (truth_chrom_pos_dict, truth_samples) = read_vcf('truth_vcfs/%s'%(v))
-        (test_chrom_pos_dict,  test_samples) = read_vcf('test_vcfs/%s'%(v))
-        if set(truth_samples) != set(test_samples):
+        (test_chrom_pos_dict, test_samples) = read_vcf('test_vcfs/%s'%(v))
+
+        # Run a sanity check that should only apply to VCFs generated by maf2vcf
+        if file_type=="MAF" and set(truth_samples) != set(test_samples):
             logger.critical("Samples not matched in truth and test vcf!")
             logger.critical("Truth Samples: %s" % truth_samples)
             logger.critical("Test Samples: %s" % test_samples)
@@ -187,9 +189,8 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
         my_date = datetime.datetime.now().strftime('%Y-%m-%d')
         my_time = datetime.datetime.now().strftime('%H:%M:%S')
 
-
-        print 'Loops through each test call to get the totals for SNPs and INDELs called'
-        for site, test_record in test_chrom_pos_dict.items():                
+        logger.info("Looping through each test call to get the totals SNPs and INDELs called")
+        for site, test_record in test_chrom_pos_dict.items():
             if isinstance(test_record, list):
                 logger.critical("Skipping site with multiple variant calls")
                 logger.critical(site)
@@ -208,34 +209,32 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
             if len(test_record.get_hom_alts()) > 0:
                 site_depth = test_record.get_hom_alts()[0]['DP']
                 site_cnt = test_record.get_hom_alts()[0]['AD'][1]
-            else: 
+            else:
                 site_depth = test_record.get_hets()[0]['DP']
                 site_cnt = test_record.get_hets()[0]['AD'][1]
-                
-            for sample in test_samples:
-                if test_record.genotype(sample).gt_type !=0: #if not reference genotype
-                    
-                    #add something to the test sample totals:
-                    if site_type not in test_totals[sample]:
-                        test_totals[sample][site_type]=1
-                    else:
-                        test_totals[sample][site_type]+=1
 
-            #missed in truth
+            # Only operate on the first sample listed, usually the tumor sample for a TN-pair
+            sample = test_record.samples[0].sample
+            if test_record.samples[0].gt_type !=0: #if not reference genotype
+                if site_type not in test_totals[sample]:
+                    test_totals[sample][site_type]=1
+                else:
+                    test_totals[sample][site_type]+=1
+
+            # If this test call was missed in the truth set
             if site not in truth_chrom_pos_dict:
                 key = "Novel_" + site_type
-                for sample in test_samples:
-                    if test_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
-                        pass #do nothing
+                if test_record.samples[0].gt_type == 0: # this was ref/ref for this sample and is not a missed call
+                    pass #do nothing
+                else:
+                    line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
+                    details.write(line)
+                    if key not in sample_statistics[sample]:
+                        sample_statistics[sample][key]=1
                     else:
-                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
-                        details.write(line)
-                        if key not in sample_statistics[sample]:
-                            sample_statistics[sample][key]=1
-                        else:
-                            sample_statistics[sample][key]+=1
+                        sample_statistics[sample][key]+=1
 
-        print 'Loops through each truth call'
+        logger.info("Loops through each truth call")
         for site, truth_record in truth_chrom_pos_dict.items():
             if isinstance(truth_record, list):
                 logger.critical("Skipping site with multiple variant calls")
@@ -251,36 +250,34 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                 logger.critical(truth_record)
                 logger.critical("Bailing out")
                 sys.exit(1)
-                
+
             if len(truth_record.get_hom_alts()) > 0:
                 site_depth = truth_record.get_hom_alts()[0]['DP']
                 site_cnt = truth_record.get_hom_alts()[0]['AD'][1]
-            else: 
+            else:
                 site_depth = truth_record.get_hets()[0]['DP']
                 site_cnt = truth_record.get_hets()[0]['AD'][1]
 
-            for sample in truth_samples:
-                if truth_record.genotype(sample).gt_type !=0: #if not reference genotype
-                    #add something to the truth sample totals:
-                    if site_type not in truth_totals[sample]:
-                        truth_totals[sample][site_type]=1
-                    else:
-                        truth_totals[sample][site_type]+=1
+            # Only operate on the first sample listed, usually the tumor sample for a TN-pair
+            if truth_record.samples[0].gt_type !=0:
+                if site_type not in truth_totals[sample]:
+                    truth_totals[sample][site_type]=1
+                else:
+                    truth_totals[sample][site_type]+=1
 
             #missed in truth
             if site not in test_chrom_pos_dict:
                 key = "Missed_" + site_type
-                for sample in truth_samples:
-                    if truth_record.genotype(sample).gt_type == 0: # this was ref/ref for this sample and is not a missed call:
-                        pass #do nothing
-                    else:
-                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
-                        details.write(line)
+                if truth_record.samples[0].gt_type == 0: # this was ref/ref for this sample and is not a missed call
+                    pass #do nothing
+                else:
+                    line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
+                    details.write(line)
 
-                        if key not in sample_statistics[sample]:
-                            sample_statistics[sample][key]=1
-                        else:
-                            sample_statistics[sample][key]+=1                        
+                    if key not in sample_statistics[sample]:
+                        sample_statistics[sample][key]=1
+                    else:
+                        sample_statistics[sample][key]+=1
 
             else:
                 #FIXME this will break if there are multiple records per site, i.e. a list - cough up blood
@@ -289,29 +286,29 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
                     logger.critical("Test file has multiple lines for one position!")
                     logger.critical("Change code to handle this!")
                     sys.exit(1)
-                for sample in truth_samples:
-                    truth_genotype = re.split('[/|]', truth_record.genotype(sample).gt_bases)
-                    test_genotype = re.split('[/|]', test_record.genotype(sample).gt_bases)
-                    if set(truth_genotype) == set(test_genotype):
-                        key = "Correct_%s_Genotype" % site_type
-                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
-                        details.write(line)
-                        if key not in sample_statistics[sample]:
-                            sample_statistics[sample][key]=1
-                        else:
-                            sample_statistics[sample][key]+=1
-                    elif test_record.genotype(sample).gt_type !=0:
-                        key = "Incorrect_%s_Genotype" % site_type
-                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
-                        details.write(line)
-                        if key not in sample_statistics[sample]:
-                            sample_statistics[sample][key]=1
-                        else:
-                            sample_statistics[sample][key]+=1
+                sample = truth_record.samples[0].sample
+                truth_genotype = re.split('[/|]', truth_record.samples[0].gt_bases)
+                test_genotype = re.split('[/|]', test_record.samples[0].gt_bases)
+                if set(truth_genotype) == set(test_genotype):
+                    key = "Correct_%s_Genotype" % site_type
+                    line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
+                    details.write(line)
+                    if key not in sample_statistics[sample]:
+                        sample_statistics[sample][key]=1
+                    else:
+                        sample_statistics[sample][key]+=1
+                elif test_record.genotype(sample).gt_type !=0:
+                    key = "Incorrect_%s_Genotype" % site_type
+                    line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
+                    details.write(line)
+                    if key not in sample_statistics[sample]:
+                        sample_statistics[sample][key]=1
+                    else:
+                        sample_statistics[sample][key]+=1
 
     details.close()
     keys = ["Missed_SNP", "Novel_SNP", "Correct_SNP_Genotype", "Incorrect_SNP_Genotype", "Missed_INDEL", "Novel_INDEL", "Correct_INDEL_Genotype", "Incorrect_INDEL_Genotype"]
-    ofh = open('%s.out'%(prefix), "w")
+    ofh = open('%s/%s.out'%(outdir,prefix), "w")
     logger.info("Writing stats to file...")
 
     ofh.write("\t".join(["sample"] + keys + ['Total_Truth_SNPs', 'Total_Truth_INDELs', 'Total_Test_SNPs', 'Total_Test_INDELs', 'Union_SNPs', 'Union_INDELs', 'Date', 'Time', 'Project_Prefix']) + '\n')
@@ -351,14 +348,15 @@ def main(ref_vcf, test_vcf, first, second, file_type, reference, bedfile, normal
 
         ofh.write('%s\t%s\t%s\t%s\t%s\t%s\n'%('\t'.join(line), snps_union, indels_union, my_date, my_time, prefix))
     ofh.close()
-        
-    cmd = ['%s/vPlot.R'%(os.path.dirname(os.path.realpath(__file__))), '%s.out'%(prefix), '%s_details.out'%(prefix), prefix]
-    subprocess.call(cmd)
 
+    # Generate plots if asked for it
+    if plot:
+        cmd = ['%s/vPlot.R'%(os.path.dirname(os.path.realpath(__file__))), '%s/%s.out'%(outdir,prefix), '%s/%s_details.out'%(outdir,prefix), '%s/%s'%(outdir,prefix)]
+        subprocess.call(cmd)
 
 def configure_logging(log_level):
 
-    logger = logging.getLogger("MAF/VCF Accuracy Eval")
+    logger = logging.getLogger("MAF/VCF Parity Evaluator")
     logger.setLevel(log_level)
     ch = logging.StreamHandler()
     ch.setLevel(log_level)
@@ -370,20 +368,21 @@ def configure_logging(log_level):
 # If this module is run as a script in CLI, the flow of control starts here
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Takes in two test files and evaluates the test file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--first-file', action='store', dest='ref_file', default=None, required=True, help='"Truthful" reference file.')
-    parser.add_argument('--second-file', action='store', dest='test_file', default=None, required=True, help='File to be tested.')
-    parser.add_argument('--first-prefix', action='store', dest='first', default='First', help='Prefix for first file output')
-    parser.add_argument('--second-prefix', action='store', dest='second', default='Second', help='Prefix for second file output.')
-    mutex_group = parser.add_mutually_exclusive_group(required=True)
-    mutex_group.add_argument('--vcf', action='store_const', dest='file_type', const='VCF', help='Input files are VCF format')
-    mutex_group.add_argument('--maf', action='store_const', dest='file_type', const='MAF', help='Input files are MAF format')
-    parser.add_argument('--reference', choices=cmo.util.genomes.keys(), required=True)
-    parser.add_argument('--bedfile', action='store', dest='bedfile', default=None, help='Optional bedfile to limit the regions of comparison')
-    parser.add_argument('--normalize', action='store_true', dest='normalize', default=False, help='Normalize calls with bcftools/vt?' )
-    parser.add_argument('-d', '--debug', action='store_const', const=logging.DEBUG, dest='log_level', default=logging.INFO, help='Turn on debug output')
-    parser.add_argument('-p', '--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column')
-    parser.add_argument('-P', '--plot', action='store_true', dest='plot', default=True, help='Whether to plot percentages')
-    args=parser.parse_args()
+    parser = argparse.ArgumentParser(description='Takes in a truth and test VCF/MAF to generate concordance metrics/plots', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    vcf_or_maf = parser.add_mutually_exclusive_group(required=True)
+    vcf_or_maf.add_argument('--vcf', action='store_const', dest='file_type', const='VCF', help='Input files are VCF format, and only the first sample is compared')
+    vcf_or_maf.add_argument('--maf', action='store_const', dest='file_type', const='MAF', help='Input files are MAF format')
+    parser.add_argument('--first-file', action='store', dest='file1', required=True, help='"Truthful" reference VCF or MAF file')
+    parser.add_argument('--second-file', action='store', dest='file2', required=True, help='VCF or MAF file to be tested for truthiness')
+    parser.add_argument('--first-prefix', action='store', dest='truth', default='First', help='Short prefixed label describing the first file')
+    parser.add_argument('--second-prefix', action='store', dest='test', default='Second', help='Short prefixed label describing the second file')
+    parser.add_argument('--bedfile', action='store', dest='bedfile', help='Optional bedfile to limit the regions of comparison')
+    parser.add_argument('--output-dir', action='store', dest='dir', default='parity', help='Writable folder to dump metrics/plots')
+    parser.add_argument('--reference', choices=cmo.util.genomes.keys(), default='GRCh37', help='Reference build that these variants use')
+    parser.add_argument('--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column')
+    parser.add_argument('--debug', action='store_const', const=logging.DEBUG, dest='log_level', default=logging.INFO, help='Set the logging level for debugging')
+    parser.add_argument('--normalize', action='store_true', dest='normalize', default=True, help='Normalize calls with bcftools or vt')
+    parser.add_argument('--plot', action='store_true', dest='plot', default=True, help='Whether to generate plots')
+    args = parser.parse_args()
     ref_fasta = cmo.util.genomes[args.reference]['fasta']
-    main(args.ref_file, args.test_file, args.first, args.second, args.file_type, ref_fasta, args.bedfile, args.normalize, args.prefix, args.plot, args.log_level)
+    main(args.file1, args.file2, args.truth, args.test, args.file_type, args.dir, ref_fasta, args.bedfile, args.normalize, args.prefix, args.plot, args.log_level)
