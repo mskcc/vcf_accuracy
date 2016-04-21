@@ -287,24 +287,25 @@ def main(ref_file, test_file, first, second, file_type, outdir, reference, bedfi
                     logger.critical("Change code to handle this!")
                     sys.exit(1)
                 sample = truth_record.samples[0].sample
-                truth_genotype = re.split('[/|]', truth_record.samples[0].gt_bases)
-                test_genotype = re.split('[/|]', test_record.samples[0].gt_bases)
-                if set(truth_genotype) == set(test_genotype):
-                    key = "Correct_%s_Genotype" % site_type
-                    line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
-                    details.write(line)
-                    if key not in sample_statistics[sample]:
-                        sample_statistics[sample][key]=1
-                    else:
-                        sample_statistics[sample][key]+=1
-                elif test_record.genotype(sample).gt_type !=0:
-                    key = "Incorrect_%s_Genotype" % site_type
-                    line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
-                    details.write(line)
-                    if key not in sample_statistics[sample]:
-                        sample_statistics[sample][key]=1
-                    else:
-                        sample_statistics[sample][key]+=1
+                if truth_record.genotype(sample).gt_bases is not None and test_record.genotype(sample).gt_bases is not None:
+                    truth_genotype = re.split('[/|]', truth_record.genotype(sample).gt_bases)
+                    test_genotype = re.split('[/|]', test_record.genotype(sample).gt_bases)
+                    if set(truth_genotype) == set(test_genotype):
+                        key = "Correct_%s_Genotype" % site_type
+                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
+                        details.write(line)
+                        if key not in sample_statistics[sample]:
+                            sample_statistics[sample][key]=1
+                        else:
+                            sample_statistics[sample][key]+=1
+                    elif test_record.genotype(sample).gt_type !=0:
+                        key = "Incorrect_%s_Genotype" % site_type
+                        line = '%s\t%s\t%s\t%s\t%s\t%s\n'%(site_type, site, key, sample, site_depth, site_cnt)
+                        details.write(line)
+                        if key not in sample_statistics[sample]:
+                            sample_statistics[sample][key]=1
+                        else:
+                            sample_statistics[sample][key]+=1
 
     details.close()
     keys = ["Missed_SNP", "Novel_SNP", "Correct_SNP_Genotype", "Incorrect_SNP_Genotype", "Missed_INDEL", "Novel_INDEL", "Correct_INDEL_Genotype", "Incorrect_INDEL_Genotype"]
