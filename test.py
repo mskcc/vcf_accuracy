@@ -4,7 +4,7 @@ import sys
 from tempfile import mkdtemp
 from shutil import rmtree
 from subprocess import call
-from os import chdir, getcwd, environ, makedirs
+from os import getcwd, environ, makedirs
 from os.path import isfile, exists
 from getpass import getuser
 
@@ -25,29 +25,28 @@ class TestsForNose:
             environ['TMPDIR'] = tmp_dir
 
         # Build commands to run the tool on datasets included in the repo
+        self.outdir = mkdtemp()
         cmd_maf = [ sys.executable, tool,
             '--maf', '--normalize', '--reference', 'GRCh37',
             '--first-file', tool_dir + '/data/truth.maf',
             '--second-file', tool_dir + '/data/test.maf',
             '--first-prefix', 'truth_set',
-            '--second-prefix', 'test_set' ]
+            '--second-prefix', 'test_set',
+            '--output-dir', self.outdir + '/maf_parity' ]
         cmd_vcf = [ sys.executable, tool,
             '--vcf', '--normalize', '--reference', 'GRCh37',
             '--first-file', tool_dir + '/data/truth.vcf',
             '--second-file', tool_dir + '/data/test.vcf',
             '--first-prefix', 'truth_set',
-            '--second-prefix', 'test_set' ]
+            '--second-prefix', 'test_set',
+            '--output-dir', self.outdir + '/vcf_parity' ]
 
         # Run those commands as shell commands
         try:
-            self.mafdir = mkdtemp()
-            chdir( self.mafdir )
             self.cmd_maf_ret = call( cmd_maf, shell = False )
         except OSError as e:
             print >>sys.stderr, "Execution failed:", e
         try:
-            self.vcfdir = mkdtemp()
-            chdir( self.vcfdir )
             self.cmd_vcf_ret = call( cmd_vcf, shell = False )
         except OSError as e:
             print >>sys.stderr, "Execution failed:", e
@@ -55,8 +54,7 @@ class TestsForNose:
     # Nose runs this only once after all the tests have completed running
     @classmethod
     def teardown_class( self ):
-        rmtree( self.mafdir )
-        rmtree( self.vcfdir )
+        rmtree( self.outdir )
 
     # Check return codes from running the tool
     def test_retcodes( self ):
@@ -65,9 +63,7 @@ class TestsForNose:
 
     # Check that expected output files exist
     def test_output_files( self ):
-        chdir( self.mafdir )
-        assert isfile( 'comparison_output.out' )
-        assert isfile( 'comparison_output_details.out' )
-        chdir( self.vcfdir )
-        assert isfile( 'comparison_output.out' )
-        assert isfile( 'comparison_output_details.out' )
+        assert isfile( self.outdir + '/maf_parity/comparison_output.out' )
+        assert isfile( self.outdir + '/maf_parity/comparison_output_details.out' )
+        assert isfile( self.outdir + '/vcf_parity/comparison_output.out' )
+        assert isfile( self.outdir + '/vcf_parity/comparison_output_details.out' )

@@ -259,6 +259,7 @@ def main(ref_file, test_file, first, second, file_type, outdir, reference, bedfi
                 site_cnt = truth_record.get_hets()[0]['AD'][1]
 
             # Only operate on the first sample listed, usually the tumor sample for a TN-pair
+            sample = truth_record.samples[0].sample
             if truth_record.samples[0].gt_type !=0:
                 if site_type not in truth_totals[sample]:
                     truth_totals[sample][site_type]=1
