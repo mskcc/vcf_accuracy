@@ -105,9 +105,16 @@ def read_vcf(vcf_file):
                 vcf_dict[key]=rec_list
     samples = {}
     for key, record in vcf_dict.items():
-        for call in record.samples:
-            samples[call.sample]=1
-        break
+        try:
+            for call in record.samples:
+                samples[call.sample]=1
+            break
+        except:
+            continue
+    if not len(samples.keys())>0:
+        logger.critical("Unable to find sample names from vcf using pyvcf parser- is vcf formatted correctly?: %s" % vcf_file)
+        sys.exit(1)
+
     return (vcf_dict, samples.keys())
 
 
@@ -383,7 +390,7 @@ if __name__ == '__main__':
     parser.add_argument('--reference', choices=cmo.util.genomes.keys(), default='GRCh37', help='Reference build that these variants use')
     parser.add_argument('--prefix', action='store', dest='prefix', default='comparison_output', help='Prefix for output file and output column')
     parser.add_argument('--debug', action='store_const', const=logging.DEBUG, dest='log_level', default=logging.INFO, help='Set the logging level for debugging')
-    parser.add_argument('--normalize', action='store_true', dest='normalize', default=True, help='Normalize calls with bcftools or vt')
+    parser.add_argument('--normalize', action='store_true', dest='normalize', default=False, help='Normalize calls with bcftools or vt')
     parser.add_argument('--plot', action='store_true', dest='plot', default=True, help='Whether to generate plots')
     args = parser.parse_args()
     ref_fasta = cmo.util.genomes[args.reference]['fasta']
